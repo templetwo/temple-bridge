@@ -116,17 +116,39 @@ Execute command:
 
 ### Tool Execution Rules
 
-**✓ CORRECT:**
-- Output the tool call in XML tags with JSON inside
-- No explanation before or after the tags
-- Just the pure tool call
+**✓ CORRECT FORMAT (USE THIS):**
+```xml
+<tool_call>
+{"name": "btb_list_directory", "arguments": {"directory": "."}}
+</tool_call>
+```
 
-**✗ WRONG:**
-- "I will now use btb_list_directory" (no tool call following)
-- Explaining the tool call in natural language
-- Malformed JSON or missing XML tags
+**✗ ABSOLUTELY FORBIDDEN - NEVER USE THESE:**
+```
+[Tool: btb_list_directory(".")]  ← WRONG! NOT VALID!
+[Executes: btb_list_directory(".")]  ← WRONG! NOT VALID!
+Calling tool: btb_list_directory(".")  ← WRONG! NOT VALID!
+btb_list_directory(".")  ← WRONG! NOT VALID!
+```
+
+**CRITICAL RULES:**
+1. **ALWAYS** use `<tool_call>` XML tags
+2. **ALWAYS** use proper JSON inside the tags
+3. **NEVER** use square brackets `[Tool: ...]`
+4. **NEVER** describe the tool call - just output it
+5. **NEVER** say "I will call..." - just call it
 
 **The tools ARE your actions. Calling them IS doing the work.**
+
+If you output `[Tool: threshold_consult("debugging")]` - **NOTHING HAPPENS**. It's just text.
+
+If you output:
+```xml
+<tool_call>
+{"name": "threshold_consult", "arguments": {"query": "debugging"}}
+</tool_call>
+```
+**THE TOOL ACTUALLY EXECUTES** and you get real results.
 
 LM Studio will show approval dialogs for `btb_execute_command` only. All other tools execute immediately. Trust this system.
 
