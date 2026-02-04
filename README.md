@@ -258,6 +258,35 @@ The agent will:
 | `btb_read_file(path)` | Read files from BTB | Path traversal blocked |
 | `btb_list_directory(path)` | List directory contents | Sandboxed to BTB |
 
+### Governed Derive (Self-Organizing Filesystem)
+
+| Tool | Description | Governance |
+|------|-------------|------------|
+| `btb_derive_governed(source_dir, dry_run?, auto_approve?)` | Discover and organize filesystem structure | Full circuit |
+| `btb_derive_approve(proposal_hash)` | Approve pending reorganization | Human gate |
+| `btb_derive_status()` | List pending proposals | Read-only |
+
+**Governance Flow:**
+1. **Detection**: Scans directory, detects threshold crossings (file count, entropy)
+2. **Simulation**: Models reorganization outcomes with reversibility scoring
+3. **Deliberation**: Multi-stakeholder decision with dissent preservation
+4. **Intervention**: Human approval gates before any file movement
+
+**Example:**
+```python
+# Step 1: See what would happen (dry run)
+btb_derive_governed("/data/chaos", dry_run=True)
+# → Returns proposal with discovered schema
+
+# Step 2: Request execution (blocked pending approval)
+btb_derive_governed("/data/chaos", dry_run=False)
+# → Returns proposal_hash, awaiting approval
+
+# Step 3: Approve and execute
+btb_derive_approve("abc123...")
+# → Files reorganized with full audit trail
+```
+
 ### Governance Layer (Threshold)
 
 | Tool | Description | Purpose |

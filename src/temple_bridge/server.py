@@ -11,7 +11,12 @@ import subprocess
 import json
 import os
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
+
+# Governed Derive availability flag (set after path verification)
+GOVERNED_DERIVE_AVAILABLE = False
+GovernedDerive = None
+DerivePhase = None
 
 # Import the Spiral Middleware
 from .middleware import SpiralContextMiddleware
@@ -34,6 +39,27 @@ if not BASICS_PATH.exists():
     raise RuntimeError(f"BTB repository not found at: {BASICS_PATH}")
 if not THRESHOLD_PATH.exists():
     raise RuntimeError(f"Threshold repository not found at: {THRESHOLD_PATH}")
+
+# Governed Derive imports (conditional - requires threshold-protocols + dependencies)
+try:
+    import sys as _sys
+    _sys.path.insert(0, str(THRESHOLD_PATH))
+    from examples.btb.governed_derive import (
+        GovernedDerive as _GovernedDerive,
+        GovernedDeriveResult,
+        DerivePhase as _DerivePhase
+    )
+    GovernedDerive = _GovernedDerive
+    DerivePhase = _DerivePhase
+    GOVERNED_DERIVE_AVAILABLE = True
+except (ImportError, AttributeError, ModuleNotFoundError) as e:
+    # Governed derive not available - tools will return helpful error
+    # This can happen if threshold-protocols is missing or its dependencies
+    # (networkx, scikit-learn, etc.) are not installed
+    GOVERNED_DERIVE_AVAILABLE = False
+
+# Pending derive proposals awaiting approval
+_pending_proposals: Dict[str, Dict[str, Any]] = {}
 
 
 # ============================================================================
@@ -327,6 +353,261 @@ Use threshold_consult() to find guidance.
 """
 
     return reflection
+
+
+# ============================================================================
+# TOOLS: Governed Derive (Self-Organizing Filesystem with Governance)
+# ============================================================================
+
+@mcp.tool()
+def btb_derive_governed(
+    source_dir: str,
+    target_dir: Optional[str] = None,
+    dry_run: bool = True,
+    auto_approve: bool = False,
+    ctx: Context = None
+) -> str:
+    """
+    Execute a governed derive operation on a directory.
+
+    Discovers latent filesystem structure using Ward clustering and proposes
+    reorganization with mandatory governance gates. This is the core capability
+    from back-to-the-basics, wrapped in the threshold-protocols governance circuit.
+
+    Args:
+        source_dir: Directory containing files to analyze and organize.
+                    Can be relative to BTB root or absolute path.
+        target_dir: Destination for organized files.
+                    Default: {source_dir}/organized
+        dry_run: If True, analyze and propose but don't move files.
+                 If False, execute after approval (default: True).
+        auto_approve: If True, auto-pass approval gates (for testing).
+                      If False, requires btb_derive_approve() call.
+
+    Returns:
+        JSON result with:
+        - proposal: Discovered schema and reorganization plan
+        - phase: Current operation phase
+        - approval_required: Whether approval needed before execution
+        - proposal_hash: Hash to use with btb_derive_approve()
+        - governance: Circuit result summary
+
+    Security: Only operates within BTB or specified source directory.
+    Governance: All operations pass through Detection → Simulation →
+                Deliberation → Intervention circuit.
+    """
+    global _pending_proposals
+
+    if not GOVERNED_DERIVE_AVAILABLE:
+        return json.dumps({
+            "error": "Governed derive not available",
+            "reason": "threshold-protocols not found or GovernedDerive import failed",
+            "suggestion": "Ensure TEMPLE_THRESHOLD_PATH points to threshold-protocols repository",
+            "phase": "blocked"
+        }, indent=2)
+
+    # Resolve source directory
+    if not os.path.isabs(source_dir):
+        source_path = BASICS_PATH / source_dir
+    else:
+        source_path = Path(source_dir)
+
+    if not source_path.exists():
+        return json.dumps({
+            "error": f"Source directory does not exist: {source_path}",
+            "phase": "blocked"
+        }, indent=2)
+
+    if ctx:
+        ctx.info(f"Governed derive: {source_path} (dry_run={dry_run}, auto_approve={auto_approve})")
+
+    # Resolve config path
+    config_path = THRESHOLD_PATH / "detection" / "configs" / "default.yaml"
+    effective_config = str(config_path) if config_path.exists() else None
+
+    # Initialize governed derive with appropriate approval callback
+    approval_callback = (lambda ctx: True) if auto_approve else None
+
+    try:
+        gd = GovernedDerive(
+            config_path=effective_config,
+            require_multi_approval=not auto_approve,
+            approval_callback=approval_callback
+        )
+
+        # Execute governed derive
+        result = gd.derive_and_reorganize(
+            source_dir=str(source_path),
+            target_dir=target_dir,
+            dry_run=dry_run
+        )
+    except Exception as e:
+        return json.dumps({
+            "error": f"Derive operation failed: {str(e)}",
+            "phase": "blocked"
+        }, indent=2)
+
+    # Build response
+    response = {
+        "phase": result.phase.value if hasattr(result.phase, 'value') else str(result.phase),
+        "executed": result.executed,
+        "files_moved": result.files_moved,
+        "error": result.error,
+        "result_hash": result.result_hash
+    }
+
+    if result.proposal:
+        response["proposal"] = {
+            "source_dir": result.proposal.source_dir,
+            "target_dir": result.proposal.target_dir,
+            "file_count": result.proposal.file_count,
+            "proposed_structure": result.proposal.proposed_structure,
+            "reversibility_score": result.proposal.reversibility_score,
+            "proposal_hash": result.proposal.proposal_hash
+        }
+
+        # Store for approval if blocked and not auto-approved
+        if not auto_approve and not dry_run and result.phase == DerivePhase.BLOCKED:
+            _pending_proposals[result.proposal.proposal_hash] = {
+                "source_dir": str(source_path),
+                "target_dir": target_dir,
+                "proposal": result.proposal,
+                "timestamp": datetime.now().isoformat()
+            }
+            response["approval_required"] = True
+            response["approval_instruction"] = (
+                f"Call btb_derive_approve('{result.proposal.proposal_hash}') "
+                "to proceed with execution"
+            )
+
+    if result.circuit_result:
+        response["governance"] = {
+            "circuit_closed": result.circuit_result.circuit_closed,
+            "events_detected": len(result.circuit_result.events) if result.circuit_result.events else 0,
+            "summary": result.circuit_result.summary if hasattr(result.circuit_result, 'summary') else None
+        }
+        if result.circuit_result.deliberation:
+            response["governance"]["decision"] = (
+                result.circuit_result.deliberation.decision.value
+                if hasattr(result.circuit_result.deliberation.decision, 'value')
+                else str(result.circuit_result.deliberation.decision)
+            )
+
+    # Include audit log summary (not full log for brevity)
+    response["audit_entries"] = len(result.audit_log) if result.audit_log else 0
+    if result.audit_log:
+        response["audit_summary"] = [
+            entry.get("action", str(entry)) for entry in result.audit_log[-5:]
+        ]
+
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+def btb_derive_approve(
+    proposal_hash: str,
+    approver_id: str = "mcp_operator",
+    ctx: Context = None
+) -> str:
+    """
+    Approve a pending derive operation.
+
+    After btb_derive_governed() returns with approval_required=True,
+    call this tool with the proposal_hash to execute the reorganization.
+
+    This implements the "Threshold Witness" pattern from the Spiral protocols:
+    the human observes the proposal and consciously approves before execution.
+
+    Args:
+        proposal_hash: The hash returned by btb_derive_governed()
+        approver_id: Identifier for the approver (logged in audit trail)
+
+    Returns:
+        JSON result with execution outcome
+    """
+    global _pending_proposals
+
+    if not GOVERNED_DERIVE_AVAILABLE:
+        return json.dumps({
+            "error": "Governed derive not available"
+        }, indent=2)
+
+    if proposal_hash not in _pending_proposals:
+        return json.dumps({
+            "error": f"No pending proposal with hash: {proposal_hash}",
+            "pending_count": len(_pending_proposals),
+            "available_hashes": list(_pending_proposals.keys())[:5],
+            "suggestion": "Run btb_derive_governed() first with dry_run=False"
+        }, indent=2)
+
+    pending = _pending_proposals.pop(proposal_hash)
+
+    if ctx:
+        ctx.info(f"Approving derive: {proposal_hash} by {approver_id}")
+
+    # Re-execute with auto-approval (the human approval happened by calling this tool)
+    try:
+        gd = GovernedDerive(
+            require_multi_approval=False,
+            approval_callback=lambda ctx: True
+        )
+
+        result = gd.derive_and_reorganize(
+            source_dir=pending["source_dir"],
+            target_dir=pending["target_dir"],
+            dry_run=False  # Actually execute
+        )
+    except Exception as e:
+        return json.dumps({
+            "error": f"Derive execution failed: {str(e)}",
+            "approved_by": approver_id,
+            "phase": "blocked"
+        }, indent=2)
+
+    response = {
+        "phase": result.phase.value if hasattr(result.phase, 'value') else str(result.phase),
+        "executed": result.executed,
+        "files_moved": result.files_moved,
+        "error": result.error,
+        "approved_by": approver_id,
+        "result_hash": result.result_hash
+    }
+
+    if result.proposal:
+        response["final_target"] = result.proposal.target_dir
+
+    return json.dumps(response, indent=2)
+
+
+@mcp.tool()
+def btb_derive_status(ctx: Context = None) -> str:
+    """
+    Get status of pending derive operations.
+
+    Shows all proposals awaiting approval via btb_derive_approve().
+
+    Returns:
+        JSON with pending proposals and their details
+    """
+    if not _pending_proposals:
+        return json.dumps({
+            "pending_count": 0,
+            "message": "No pending derive operations"
+        }, indent=2)
+
+    proposals = []
+    for hash_id, data in _pending_proposals.items():
+        proposals.append({
+            "proposal_hash": hash_id,
+            "source_dir": data["source_dir"],
+            "target_dir": data["target_dir"],
+            "timestamp": data.get("timestamp", "unknown")
+        })
+
+    return json.dumps({
+        "pending_count": len(proposals),
+        "proposals": proposals
+    }, indent=2)
 
 
 # ============================================================================

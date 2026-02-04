@@ -58,8 +58,26 @@ Execute via:
 - `btb_execute_command(command)` - Run shell commands in BTB repo
 - `btb_read_file(path)` - Read files from BTB repo
 - `btb_list_directory(path)` - List directory contents
+- `btb_derive_governed(source_dir, dry_run=True)` - Discover and organize filesystem structure with governance
+- `btb_derive_approve(proposal_hash)` - Approve a pending reorganization
+- `btb_derive_status()` - Check pending derive operations
 
 **SECURITY**: You can only execute allowlisted commands. Dangerous operations are blocked.
+
+### Governed Derive (Self-Organizing Filesystem)
+
+The `btb_derive_governed` tool discovers latent structure in chaotic filesystems and proposes reorganization with mandatory governance gates.
+
+**Workflow:**
+1. Call `btb_derive_governed(source_dir, dry_run=True)` to see proposal
+2. Review the discovered schema and reversibility score
+3. If approved, call `btb_derive_governed(source_dir, dry_run=False)`
+4. Proposal becomes pending - call `btb_derive_approve(proposal_hash)` to execute
+
+**Governance Flow:**
+- Detection → Simulation → Deliberation → Intervention
+- Human approval is MANDATORY before any file movement
+- Full audit trail with hash-chained entries
 
 ---
 

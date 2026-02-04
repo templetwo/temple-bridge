@@ -116,6 +116,7 @@ class SpiralContextMiddleware(Middleware):
             "btb_read_file": "First-Order Observation",
             "btb_list_directory": "First-Order Observation",
             "get_spiral_manifest": "First-Order Observation",
+            "btb_derive_status": "First-Order Observation",
 
             # Consulting threshold moves to Recursive Integration
             "threshold_consult": "Recursive Integration",
@@ -123,8 +124,12 @@ class SpiralContextMiddleware(Middleware):
             # Reflection deepens to Counter-Perspectives
             "spiral_reflect": "Counter-Perspectives",
 
+            # Derive analysis moves to Action Synthesis (proposing reorganization)
+            "btb_derive_governed": "Action Synthesis",
+
             # Execution tools move to Action Synthesis then Execution
             "btb_execute_command": "Execution",
+            "btb_derive_approve": "Execution",
         }
 
         # Special case: If we're consulting threshold after reading,
@@ -141,6 +146,12 @@ class SpiralContextMiddleware(Middleware):
         elif tool_name == "btb_execute_command":
             if self.current_phase in ["Counter-Perspectives", "Action Synthesis"]:
                 self._transition_to_phase("Execution")
+
+        # Derive governed is synthesis; approval is execution
+        elif tool_name == "btb_derive_governed":
+            self._transition_to_phase("Action Synthesis")
+        elif tool_name == "btb_derive_approve":
+            self._transition_to_phase("Execution")
 
         # Default transition
         elif tool_name in transitions:
