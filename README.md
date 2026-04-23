@@ -1,5 +1,10 @@
 # Temple Bridge
 
+> ⚡ **Active development moved to [templetwo/sovereign-stack](https://github.com/templetwo/sovereign-stack).**
+> Temple Bridge was the v0 Sovereign Stack (Jan–Feb 2026, 8 tools). The work continues at **sovereign-stack v1.3.1**: 64 tools, 315/315 tests, witness layer, runtime-reflexive Nape governance, persistent multi-instance memory accessible from laptop, phone, web. Architecture, lessons, and lineage notes from this repo are honored — but if you're looking for the live Stack, **[star sovereign-stack](https://github.com/templetwo/sovereign-stack)** instead.
+
+---
+
 **The Sovereign Stack: Local AI with Memory & Governance**
 
 Temple Bridge is an MCP (Model Context Protocol) server that binds two distinct repositories into a unified, intelligent system:
